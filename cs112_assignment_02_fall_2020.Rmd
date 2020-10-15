@@ -36,6 +36,11 @@ Create a set of 1000 outcome observations using a data-generating process (DGP) 
 
 ```{r}
 # YOUR CODE HERE
+set.seed(32)
+stores = 100:1100
+market_growth = (0:1.8) + rnorm(1000, mean=0, sd=0.2)
+price = stores + stores*market_growth + rnorm(1000, mean=0, sd=40)
+plot(price)
 
 ```
 
