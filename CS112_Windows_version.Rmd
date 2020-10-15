@@ -40,11 +40,12 @@ Create a set of 1000 outcome observations using a data-generating process (DGP) 
 
 set.seed(32)
 stores = seq(100, 1000, length=1000)
-overall_market_growth = round(seq(0, 1.8, length=1000) + rnorm(1000, mean=0, sd=0.15), 2)
-price = round(stores + stores*(overall_market_growth) + rnorm(1000, mean=0, sd=40), 2)
+overall_market_growth = round(seq(0, 1.8, length=1000) + rnorm(1000, mean=0, sd=0.25), 2)
+price = round(stores + stores*(overall_market_growth) + rnorm(1000, mean=0, sd=30), 2)
 plot(price, 
      xlab="Weeks after IPO",
-     ylab="Share price", 
+     ylab="Share price",
+     main="Stock dynamics after the IPO",
      type="l")
 
 
@@ -71,28 +72,35 @@ Each prediction should be conditional on the predictor values of the correspondi
 
 incorrect_prediction = lm(price ~ overall_market_growth)
 
+
+# This way, we get a 1000 simulated values for the intercept and the slope
+# depending on what coefficient were picked from their distributions
 incorrect_prediction.sim = sim(incorrect_prediction, n.sims=1000)
 
-for (i in 1:1000) {
-    abline (a = incorrect_prediction.sim@coef[i, 1], b = incorrect_prediction.sim@coef[i, 2],
-            lwd = .5, col = "gray")
-}
+
 plot(incorrect_prediction.sim@coef,
      xlab="Intercepts of the simulated lines",
-     ylab="Simulated coefficients for \"stores\"")
+     ylab="Simulated coefficients for \"overall_market_growth\"")
 
-plot(incorrect_prediction.sim@sigma,
-     ylim=c(95, 125))
-
-
+# Making the prediction to the data based on the model
 predict_incorrect = predict(incorrect_prediction, data=price)
 
+# Getting the RMSE for the incorrect model
 incorrect_rmse = mean(((price - predict_incorrect)^2)^0.5)
-
 incorrect_rmse
-plot(predict_incorrect, col="red",
-     type="l")
 
+# Plotting the incorrect price predictions, we can see that
+# they're a bit off, although they somewhat captured the trend
+plot(predict_incorrect, col="red",
+     type="l",
+     main="Predictions for the share price", 
+     ylim=c(-500, 3000))
+
+# From the summary we can see that there is only one predictor with very
+# small p-value, hinting that this predictor is very important.
+# Since the standard error*1.96 is still smaller than the coefficient, 
+# it means that we should be fairly confident in the predictor coefficient
+summary(incorrect_prediction)
 
 ```
 
@@ -104,18 +112,32 @@ Using the correct model (correct systematic and stochastic components), and usin
 Each prediction should be conditional on the predictor values of the corresponding observation. E.g., when predicting for observation #1, use the predictor values of observation #1.
 
 ```{r}
-prediction = lm(price ~ poly(stores, 1) + poly(overall_market_growth, 1))
+# We know that the data was formed as a linear model, so we should not use polynomials
+prediction = lm(price ~ stores + overall_market_growth)
 prediction.sim = sim(prediction, n.sims=1000)
+
+
 plot(prediction.sim@coef,
      xlab="Intercepts of the simulated lines",
      ylab="Simulated coefficients for \"stores\"")
-plot(prediction.sim@sigma,
-     ylim=c(95, 125))
+
 predict_correct = predict(prediction, data=price)
+
 rmse = mean(((price - predict_correct)^2)^0.5)
 rmse
-plot(predict_correct, col="red", 
-     type="l")
+
+plot(predict_correct, col="blue",
+     type="l",
+     main="Predictions for the share price",
+     xlab="Weeks since IPO",
+     ylab="Price ($)", 
+     ylim=c(-500, 3000))
+
+# Both predictors have very small p-values, meaning that they are important
+# to the model. 
+# Since the standard error*1.96 for both predictors is still smaller than the coefficients, 
+# it means that we should be fairly confident in the coefficients
+summary(prediction)
 
 ```
 
@@ -125,7 +147,7 @@ plot(predict_correct, col="red",
 
 Which RMSE is larger: The one from the correct model or the one from the incorrect model? Why?
 
-
+RMSE from the correct model is much lower (117 - 200 = -83) than the RMSE of the incorrect model. This happened because the incorrect model had only one predictor, while to create the dataset I used two predictors. Furthermore, although the predictor passed to the incorrect model captured the data trend, it had very high variability and making predictions on it challenging because of the drastic fluctuations. Looking at the correct model's predictions, we notice that indeed the prediction variability is much lower (I intentionally put the same y-scale on both graphs to simplify visual comparison). This happens because when we came up with the function that includes only one variable for the incorrect model, we cannot smooth it out using another variable. But, when we have two variables "stores" and "market growth", it is easier to come up with a proper function.
 
 
 ## QUESTION 2
@@ -136,6 +158,14 @@ One figure that shows a regression line fit to a 2-dimensional (x and y) scatter
 
 ```{r}
 # YOUR CODE HERE
+set.seed(32)
+x = 1:9
+y = x + rnorm(length(x), mean=0, sd=1)
+lm1 = lm(y ~ x)
+plot(x, y,
+     main="Regression with positive slope") + abline(lm(y~x), col="red")
+
+
 
 ```
 
@@ -143,12 +173,22 @@ And, another figure that shows a regression line with a negative slope fit to a 
 
 ```{r}
 # YOUR CODE HERE
+set.seed(32)
+x = c(1:9)
+y = c(x + rnorm(length(x), mean=0, sd=1))
+
+x = append(x, 10)
+y = append(y, -45)
+
+lm1 = lm(y ~ x)
+plot(x, y, 
+     main="Regression with negative slope") + abline(lm(y~x), col="red")
 
 ```
 
 Be sure to label the axes and the title the figures appropriately. Include a brief paragraph that explains the number of observations and how you created the data set and the outlier.
 
-
+Since our cost function is built to minimize the distance between the line and the datapoints, when the distance to a certain datapoint is large, it can make a tradeoff - change the slope to drastically decrease the distance to the outlier while increasing the distance to other datapoints.
 
 
 ## QUESTION 3
