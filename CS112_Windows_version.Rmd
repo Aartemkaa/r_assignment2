@@ -1,4 +1,5 @@
 
+
 ---
 title: "CS112 Assignment 2, Fall 2020"
 author: "Artem Kalyta"
@@ -201,24 +202,52 @@ black = mean(lalonde$black)
 hisp = mean(lalonde$hisp)
 re74 = mean(lalonde$re74)
 re75 = mean(lalonde$re75)
-data_means = data.frame(age, black, hisp, re74, re75)
-colnames(data_means) = c("age", "black", "hisp", "re74", "re75")
+educ = NA
+data_means = data.frame(age, educ, re74, re75, hisp, black)
+colnames(data_means) = c("age", "educ", "re74", "re75", "hisp", "black")
 
-model.lalonde.sim = sim(model.lalonde, n.sims=1000)
-
+small  = c()
+middle = c()
+big    = c()
 
 for (i in 3:16){
   
+  # setting the education predictor to a fluctuating value to 
+  # understand its isolated impact on the model
   data_means$educ = i
   
-  for (i in 1:length(model.lalonde.sim)){
-      class(model.lalonde.sim@coef[i, ]) <- "lm"
-      pred_educ = predict(model.lalonde.sim@coef[i, ], newdata=data_means)
+  # getting a vector to store 1000 Expected Values
+  # for a single value of the Education
+  expected_values = c()
+  
+  
+  for (x in 1:10) {
+      # simulating 1000 coefficients x times
+      model.lalonde.sim = sim(model.lalonde, n.sims=1000)
+      
+      #vector to store the predicted values
+      storage = c()
+      
+      
+      for (z in 1:1000){
+        predictions = model.lalonde.sim@coef[z, ]*data_means
+        storage = append(storage, sum(predictions))
+      }
+      
+      
+      expected_values = append(expected_values, mean(storage))
   }
   
+  
+  # calculating the quantiles
+  small  = append(small, quantile(expected_values, probs=0.025))
+  middle = append(middle, mean(expected_values))
+  big    = append(big, quantile(expected_values, probs=0.975))
+      
+      #generate exp value from the storage vector
+        # 1000 EV
+  
 }
-
-
 ```
 
 #### STEP 4
@@ -226,7 +255,6 @@ for (i in 3:16){
 Then, do the same thing, but this time for the predicted values of `re78`. Be sure to include axes labels and figure titles.
 
 ```{r}
-
 age = mean(lalonde$age)
 black = mean(lalonde$black)
 hisp = mean(lalonde$hisp)
@@ -234,11 +262,9 @@ re74 = mean(lalonde$re74)
 re75 = mean(lalonde$re75)
 data_means = data.frame(age, black, hisp, re74, re75)
 colnames(data_means) = c("age", "black", "hisp", "re74", "re75")
-
 predicted = c()
 mins      = c()
 maxs      = c()
-
 for (i in 3:16) {
   
   data_means$educ = i
@@ -247,13 +273,11 @@ for (i in 3:16) {
   mins = append(mins, predictions[2])
   maxs = append(maxs, predictions[3])
 }
-
 x = 3:16
 small = data.frame(x, mins)
 pred  = data.frame(x, predicted)
 big   = data.frame(x, maxs)
 cols  = c("Educ", "Predicted_values")
-
 colnames(small) = cols
 colnames(pred) = cols
 colnames(big) = cols
@@ -263,11 +287,9 @@ ggplot() +
   geom_line(data = big, aes(x = Educ, y = Predicted_values), color = "red", lwd=0.4) +
   xlab('Years of education') +
   ylab('Predicted values')
-
 # The area enclosed by the two red lines represents the 95% confidence interval for our prediction
 # The bold black line represents our prediction about the income of a person with all predictors 
 # but education held constant.
-
 ```
 
 #### STEP 5
@@ -284,13 +306,9 @@ Lastly, write a short paragraph with your reflections on this exercise (specific
 Using the `lalonde` data set, run a logistic regression, modeling treatment status as a function of `age`, `education`, `hisp`, `re74` and `re75`. Report and interpret the regression coefficient and 95% confidence intervals for `age` and `education`.
 
 ```{r}
-
 data(lalonde)
-
 model.glm = glm(treat ~ age+educ+hisp+re74+re75, data=lalonde)
 summary(model.glm)
-
-
 ```
 
 Report and interpret regression coefficient and 95% confidence intervals for `age` and `education` here.
