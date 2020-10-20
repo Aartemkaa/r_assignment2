@@ -108,7 +108,6 @@ plot(prediction.sim@coef,
      ylab="Simulated coefficients for \"stores\"")
 predict_correct = predict(prediction, data=price)
 rmse = mean(((price - predict_correct)^2)^0.5)
-rmse
 plot(predict_correct, col="blue",
      type="l",
      main="Predictions for the share price",
@@ -163,7 +162,7 @@ plot(x, y,
 
 Be sure to label the axes and the title the figures appropriately. Include a brief paragraph that explains the number of observations and how you created the data set and the outlier.
 
-Since our cost function is built to minimize the distance between the line and the datapoints, when the distance to a certain datapoint is large, it can make a tradeoff - change the slope to drastically decrease the distance to the outlier while increasing the distance to other datapoints.
+Since our cost function is built to minimize the distance between the line and the datapoints, when the distance to a certain datapoint is large, it can make a tradeoff - change the slope to drastically decrease the distance to the outlier while increasing the distance to other datapoints. This is just a random dataset that illustrates the property, I created it by taking a vector of consecutive values and appending a single outlier that reverses the regression line slope. This illustrates well a poor performance of linear models to data that depicts a nonlinear pattern.
 
 
 ## QUESTION 3
@@ -188,7 +187,7 @@ summary(model.lalonde)
 
 Then calculate R-squared by hand and confirm / report that you get the same or nearly the same answer as the summary (`lm`) command. 
 
-Write out hand calculations here.
+Write out hand calculations here. ### calculate it later!!!!!
 
 
 
@@ -220,22 +219,28 @@ for (i in 3:16){
   
   expected_values = c()
   
-  for (x in 1:10) {
+  for (x in 1:100) {
       # simulating 1000 coefficients x times
-      model.lalonde.sim = sim(model.lalonde, n.sims=1000)
+      model.lalonde.sim = sim(model.lalonde, n.sims=100)
       
       storage = c()
       
-      for (z in 1:1000) {
+      for (z in 1:100) {
       
-      # getting the predicted value for each simulated coefficient
-        preds = model.lalonde.sim@coef[z, 2:7] * data_means + model.lalonde.sim@coef[z, 1]
+        # getting the predicted value for each simulated coefficient
+        # we do not need to supplement the prediction with a stochastic term
+        # since we are calculating the Expected Value - we still are taking the
+        # mean of the predictions and since the mean of the stochastic term
+        # should be zero, there's no value in adding it to the model.
+        preds = sum(model.lalonde.sim@coef[z, 2:7] * data_means) 
+        preds = preds + model.lalonde.sim@coef[z, 1]
         storage = append(storage, sum(preds))
         
       }
       # Expected Value is the mean of all the values obtained
       # using simulated coefficients
       expected_values = append(expected_values, mean(storage))
+      #cat("Simulated", x, "sets of 1000 coefficients. \n")
   }
   
   # calculating the quantiles
@@ -243,10 +248,24 @@ for (i in 3:16){
   middle = append(middle, mean(expected_values))
   big    = append(big, quantile(expected_values, probs=0.975))
   cat("Done with educ =", i, "iteration. \n")
-      
-  
   
 }
+
+
+x = 3:16
+small_ev  = data.frame(x, small)
+middle_ev = data.frame(x, middle)
+big_ev    = data.frame(x, big)
+cols  = c("Educ", "Predicted_values")
+colnames(small_ev) = cols
+colnames(middle_ev) = cols
+colnames(big_ev) = cols
+ggplot() + 
+  geom_line(data = small_ev, aes(x = Educ, y = Predicted_values), color = "red", lwd=0.4) +
+  geom_line(data = middle_ev, aes(x = Educ, y = Predicted_values), color = "black", lwd=2) +
+  geom_line(data = big_ev, aes(x = Educ, y = Predicted_values), color = "red", lwd=0.4) +
+  xlab('Years of education') +
+  ylab('Expected income ($)')
 ```
 
 #### STEP 4
@@ -306,13 +325,22 @@ Using the `lalonde` data set, run a logistic regression, modeling treatment stat
 
 ```{r}
 data(lalonde)
-model.glm = glm(treat ~ age+educ+hisp+re74+re75, data=lalonde)
+model.glm = glm(treat ~ age+educ+hisp+re74+re75, data=lalonde, family="binomial")
 summary(model.glm)
 ```
 
 Report and interpret regression coefficient and 95% confidence intervals for `age` and `education` here.
 
-This model is very weak from prediction standpoint - all of the regression coefficients have p-values significantly larger than 0.05, meaning that these predictors aren't actually good. It can also be seen from examining the standard errors of the coefficients  
+This model is very weak from prediction standpoint - all of the regression coefficients have p-values significantly larger than 0.05, meaning that these predictors aren't actually moderately useful. It can also be seen from examining the standard errors of the coefficients. To get the 95% confidence interval for 'age' and 'education' we need to subtract 1.96*Standard Error from the predicted coefficient for the lower bound and add this number to the predicted coefficient for the upper bound. Thus:
+"age": 
+    LWB = 2.816e-3 - (1.96*3.314e-3) = -0.00367; 
+    UPB = 2.816e-3 + (1.96*3.314e-3) =  0.00931.
+    
+"education":
+    LWB = 1.629e-02 - 1.96*1.318e-02 = -0.00954;
+    UPB = 1.629e-02 + 1.96*1.318e-02 =  0.04212
+
+This is 95% confidence interval for both predictors. Since the Standard Error multiplied by 2 is bigger than the predicted coefficient, we can state that the predictors are weak and indicate low level of certainty about our predictions.
 
 
 #### STEP 2
@@ -320,7 +348,25 @@ This model is very weak from prediction standpoint - all of the regression coeff
 Use a simple bootstrap to estimate (and report) bootstrapped confidence intervals for `age` and `education` given the logistic regression above. Code the bootstrap algorithm yourself.
 
 ```{r}
-# YOUR CODE HERE
+# bootstrapping the entire dataframe
+bootstrap = function(dataframe, samples) {
+  
+  # creating a new, bootstrapped dataframe
+  bootstrapped = data.frame()
+  
+  for (column in 1:dim(dataframe)[2]) {
+    # getting bootstrapped values
+    values = sample(dataframe[, column], size=samples, replace=TRUE)
+    
+    # assigning the values to a column with identical name in a new dataframe
+    bootstrapped$names(dataframe[column]) = values
+  }
+  
+  return(bootstrapped)
+}
+
+model.glm.bootstrapped = glm(treat ~ age+educ+hisp+re74+re75, data=bootstrapped, family="binomial")
+summary(model.glm.bootstrapped)
 ```
 
 Report bootstrapped confidence intervals for `age` and `education` here. 
@@ -333,7 +379,9 @@ Report bootstrapped confidence intervals for `age` and `education` here.
 Then, using the simulation-based approach and the `arm` library, set all the predictors at their means EXCEPT `education`, create a data visualization that shows the 95% confidence interval of the expected values of the probability of receiving treatment as education varies from 3 to 16. Be sure to include axes labels and figure titles.
 
 ```{r}
-# YOUR CODE HERE
+
+
+
 ```
 
 #### STEP 4
