@@ -206,9 +206,11 @@ educ = NA
 data_means = data.frame(age, educ, re74, re75, hisp, black)
 colnames(data_means) = c("age", "educ", "re74", "re75", "hisp", "black")
 
+# vectors to store 95% confidence interval
 small  = c()
 middle = c()
 big    = c()
+
 
 for (i in 3:16){
   
@@ -216,36 +218,33 @@ for (i in 3:16){
   # understand its isolated impact on the model
   data_means$educ = i
   
-  # getting a vector to store 1000 Expected Values
-  # for a single value of the Education
   expected_values = c()
-  
   
   for (x in 1:10) {
       # simulating 1000 coefficients x times
       model.lalonde.sim = sim(model.lalonde, n.sims=1000)
       
-      #vector to store the predicted values
       storage = c()
       
+      for (z in 1:1000) {
       
-      for (z in 1:1000){
-        predictions = model.lalonde.sim@coef[z, ]*data_means
-        storage = append(storage, sum(predictions))
+      # getting the predicted value for each simulated coefficient
+        preds = model.lalonde.sim@coef[z, 2:7] * data_means + model.lalonde.sim@coef[z, 1]
+        storage = append(storage, sum(preds))
+        
       }
-      
-      
+      # Expected Value is the mean of all the values obtained
+      # using simulated coefficients
       expected_values = append(expected_values, mean(storage))
   }
-  
   
   # calculating the quantiles
   small  = append(small, quantile(expected_values, probs=0.025))
   middle = append(middle, mean(expected_values))
   big    = append(big, quantile(expected_values, probs=0.975))
+  cat("Done with educ =", i, "iteration. \n")
       
-      #generate exp value from the storage vector
-        # 1000 EV
+  
   
 }
 ```
