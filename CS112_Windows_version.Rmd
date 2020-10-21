@@ -754,8 +754,7 @@ Create a new variable that is either successful or NOT successful and call it `s
 
 ```{r}
 
-dataset$success = c(0)
-
+dataset$success = as.numeric(dataset$state == "successful")
 
 ```
 
@@ -767,14 +766,11 @@ Remove any project length that is higher than 60.
 
 ```{r}
 
-start = mdy(c(dataset$launched))
-end   = mdy_hms(dataset$deadline)
+dataset$deadline = as.Date(dataset$deadline)
+dataset$launched = as.Date(dataset$launched)
+dataset$length   = as.numeric(dataset$deadline - dataset$launched)
 
-difference = 
-
-dataset$length = c(as.double(difftime(lubridate::ymd_hms(dataset$deadline),
-                   lubridate::ymd_hms(dataset$launched),
-                   units = "days")))
+dataset = dataset[which(dataset$length < 61), ]
 
 ```
 
@@ -785,7 +781,13 @@ While there are several variations of the k-fold cross-validation method, let’
 Randomly select 80% of the data to be put in a training set and leave the rest for a test set. 
 
 ```{r}
-# YOUR CODE HERE
+
+# I don't understand why would we split the data on two and then take 80% as training
+# so I just took it from the entire dataset
+indeces = sample(1:(dim(dataset)[1]), 0.8*(dim(dataset)[1]), replace=FALSE)
+train_data = dataset[indeces, ] 
+test_data  = dataset[-c(indeces), ]
+
 ```
 
 
@@ -794,7 +796,7 @@ Randomly select 80% of the data to be put in a training set and leave the rest f
 Use a logistic regression to find what factors determine the chances a project is successful. Use the variable indicating whether a project is successful or not as the dependent variables (Y) and number of backers, project length, main category of the project, and the real project goal as independent variables. Make sure to use the main category as factor.
 
 ```{r}
-# YOUR CODE HERE
+success.model = glm(success ~ main_category+backers+length+usd_goal_real, data=train_data, family="binomial", maxit=100)
 ```
 
 
@@ -803,7 +805,7 @@ Use a logistic regression to find what factors determine the chances a project i
 Use the model you’ve inferred from the previous step to predict the success outcomes in the test set.
 
 ```{r}
-# YOUR CODE HERE
+test.success.model.predict = predict(success.model, newdata=test_data, type="response")
 ```
 
 #### STEP 7: How well did it do? 
@@ -811,7 +813,15 @@ Use the model you’ve inferred from the previous step to predict the success ou
 Report the Root Mean Squared Error (RMSE) of the predictions for the training and the test sets. 
 
 ```{r}
-# YOUR CODE HERE
+
+train.success.model.predict = predict(success.model, type="response")
+train_rmse = mean(((train_data$success - train.success.model.predict)^2)^0.5)
+
+test_rmse = mean(((test_data$success - test.success.model.predict)^2)^0.5)
+
+cat("Training set RMSE", train_rmse)
+cat("Test set RMSE", test_rmse)
+
 ```
 
 #### Step 8: LOOCV method
@@ -819,16 +829,28 @@ Report the Root Mean Squared Error (RMSE) of the predictions for the training an
 Apply the leave-one-out cross validation (LOOCV) method to the training set. What is the RMSE of the training and test sets. How similar are the RMSEs?
 
 ```{r}
-# YOUR CODE HERE
+# LOOCV takes way too much time on the entire training dataset,
+# I will sample 1% of it and use for LOOCV just because of hardware constraints
+
+set.seed(32)
+indeces = sample(1:(dim(train_data)[1]), 0.01*(dim(train_data)[1]))
+data002 = train_data[indeces, ]
+
+data002.model = glm(success ~ main_category+backers+length+usd_goal_real, data=data002, family="binomial", maxit=100)
+train_loocv = cv.glm(data002, success.model)
+
+# looking at the adjusted cross-validation error
+train_loocv$delta
 ```
 
 
 #### Step 9: Explanations
 
 Compare the RMSE from the simple method to the LOOCV method?
+As we would expect, LOOCV error is significantly higher than just train set error because it tests how well the model performed on the data not used to build it. It assesses the model performance by predicting on one datapoints not used for model construction, while the train set performance is just how well model is fitted to the data that was used to build it. As for the LOOCV vs Test performance - usually we would expect higher Test set error since there is more data previously unseen to the model, however, this does not happend in this case.
 
 How do data scientists really use cross-validation? How is the approach in this project differ from real-world cases? Give an example to make your point!
-
+Usually, cross-validation is used to estimate the model performance on unknown real-world data (when we do not have a test set) and helps to understand how biased/varianced our model is, thus helping us to understand underlying issues with the model. When we require large volumes of data for model training and cannot afford allocating some to test set, we use k-fold or LOOCV to simulate the model performance on "unseen" data. This could be the case for when we want to fine tune the parameters (number of the trees number of layers in the Neural Net...).
 
 
 
