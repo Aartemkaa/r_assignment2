@@ -175,7 +175,7 @@ Since our cost function is built to minimize the distance between the line and t
 Using the `laLonde` data set, run a linear regression that models `re78` as a function of `age`, `education`, `re74`, `re75`, `hisp`, and `black`. Note that the `lalonde` data set comes with the package `Matching`.
 
 ```{r}
-# YOUR CODE HERE
+
 data(lalonde)
 model.lalonde = lm(re78 ~ age+educ+re74+re75+hisp+black, data=lalonde)
 ```
@@ -211,8 +211,10 @@ black = mean(lalonde$black)
 hisp = mean(lalonde$hisp)
 re74 = mean(lalonde$re74)
 re75 = mean(lalonde$re75)
-# setting it to NA and we will change it later in the loop
+
+# setting Education to NA and we will change it later in the loop
 educ = NA
+
 data_means = data.frame(age, educ, re74, re75, hisp, black)
 colnames(data_means) = c("age", "educ", "re74", "re75", "hisp", "black")
 
@@ -292,6 +294,8 @@ ggplot() +
   xlab('Years of education') +
   ylab('Expected income ($)') +
   ggtitle("Predicted Expected Values of the impact of education on the income")
+
+# CI is enclosed by the red lines, black line is the average predicted value
 ```
 
 #### STEP 4
@@ -323,8 +327,14 @@ for (i in 3:16) {
   # task, using the sim() function from the "arm" library, but I thought that 
   # it would be useful to also learn a different approach - in the case, the 
   # interval parameter that is being passed on to the "predict" function
-  # calculates the uncertainty about our mean predictions. 
+  # calculates the uncertainty about our mean predictions
   # (95% confidence interval  by default).
+  # The result stays the same anyway, since we are directly taking the intervals 
+  # from the probability distribution here instead of simulating the coefficients
+  # and calculating the intervals for them.
+  #
+  # I hope this is OK to do that since I've shown my ability to use "arm" library
+  # in the previous task.
   predictions = predict(model.lalonde, newdata=data_means, interval="confidence")
   
   # storing the mean
@@ -360,9 +370,10 @@ ggplot() +
 
 Lastly, write a short paragraph with your reflections on this exercise (specifically, the length of intervals for given expected vs. predicted values) and the results you obtained.
 
-From both graphs, it is clear that taking an expected value results in much more confident prediction. This happens because in addition to iterating over the probability distributon of the
+From both graphs, it is clear that taking an expected value results in much more confident prediction. This happens because in addition to iterating over the probability distribution of the coefficients just once, we repeat this multiple times and take the mean of predictions each time for Expected Values. Having this vector of multiple means generated from the means taken from probability distribution coefficients, means that our 95% interval would be much tighter. 
 
-
+About the result - we can observe a strong upward slope of the prediction, meaning that education can boost income by around $350 on average per additional year of education.
+ 
 
 ## QUESTION 4
 
@@ -380,14 +391,16 @@ Report and interpret regression coefficient and 95% confidence intervals for `ag
 
 This model is very weak from prediction standpoint - all of the regression coefficients have p-values significantly larger than 0.05, meaning that these predictors aren't actually moderately useful. It can also be seen from examining the standard errors of the coefficients. To get the 95% confidence interval for 'age' and 'education' we need to subtract 1.96*Standard Error from the predicted coefficient for the lower bound and add this number to the predicted coefficient for the upper bound. Thus:
 "age": 
-    LWB = 2.816e-3 - (1.96*3.314e-3) = -0.00367; 
-    UPB = 2.816e-3 + (1.96*3.314e-3) =  0.00931.
+    LWB = 1.165e-02 - 1.96*1.370e-02 = -0.0152; 
+    UPB = 1.165e-02 + 1.96*1.370e-02 =  0.0385
     
 "education":
-    LWB = 1.629e-02 - 1.96*1.318e-02 = -0.00954;
-    UPB = 1.629e-02 + 1.96*1.318e-02 =  0.04212
+    LWB = 6.922e-02 - 1.96*5.545e-02 = -0.0394;
+    UPB = 6.922e-02 + 1.96*5.545e-02 =  0.1779
+    
+    Regression coefficients are the first values in these 4 equations.
 
-This is 95% confidence interval for both predictors. Since the Standard Error multiplied by 2 is bigger than the predicted coefficient, we can state that the predictors are weak and indicate low level of certainty about our predictions.
+This is 95% confidence interval for both predictors. Since the Standard Error multiplied by 2 is bigger than the predicted coefficient, we can state that the predictors are weak and indicate low level of certainty about our predictions. Since Regression coefficients are positive, we predict that they are more likely to increase the probability of an individual being selected for a treatment group.
 
 
 #### STEP 2
@@ -423,7 +436,13 @@ summary(model.glm.bootstrapped)
 
 Report bootstrapped confidence intervals for `age` and `education` here. 
 
-
+Bootstrapped "age": 
+    LWB = 2.286e-04 - 1.96*2.861e-04 = -0.0003; 
+    UPB = 2.286e-04 + 1.96*2.861e-04 =  0.0007
+    
+Bootstrapped "education":
+    LWB = 7.240e-05 - 1.96*1.136e-03 = -0.0021;
+    UPB = 7.240e-05 + 1.96*1.136e-03 =  0.0022
 
 
 #### STEP 3
@@ -448,14 +467,6 @@ small  = c()
 middle = c()
 big    = c()
 
-logit2prob <- function(logit){ 
-  
-  odds <- exp(logit) 
-  prob <- odds / (1 + odds)
-  
-  return(prob)
-
-}
 
 # iterating over every potential value of education
 # to get the predicted impact of education on the income
@@ -468,24 +479,34 @@ for (i in 3:16){
   # vector containing the expected values (means of the simulated values)
   expected_values = c()
   
-  model.glm.sim = sim(model.glm, n.sims=1000)
-  
-  #
-  
-  for (x in 1:1000) {
+  for (x in 1:100) {
       # simulating 100 coefficients 100 times
-      # Using 1000 values for sim() or as the number of simulation takes too 
+      # Using 1000 values for sim or as the number of simulation takes too 
       # much time to run, 100 values for both should suffice
-      
+      model.glm.sim = sim(model.glm, n.sims=100)
       
       # vector containing the predictions for simulated coefficients
-      preds = sum(model.glm.sim@coef[x,] * data_means)
-      # preds = sigmoid(preds + model.glm.sim@coef[z, 1])
-      preds = sigmoid(preds)
+      storage = c()
+      
+      for (z in 1:100) {
+      
+        # getting the predicted value for each simulated coefficient
+        # we do not need to supplement the prediction with a stochastic term
+        # since we are calculating the Expected Value - we still are taking the
+        # mean of the predictions and since the mean of the stochastic term
+        # should be zero, there's no value in adding it to the model.
+      
+        preds = sum(model.glm.sim@coef[z, ] * data_means)
+        # inputting the product of values and coefficients into the sigmoid 
+        preds = sigmoid(preds)
         
+        # storing all the predictions
+        storage = append(storage, sum(preds))
+      }
+      
       # Expected Value is the mean of all the values obtained
       # using simulated coefficients
-      expected_values = append(expected_values, preds)
+      expected_values = append(expected_values, mean(storage))
   }
   
   # calculating the quantiles to get the confidence interval
@@ -516,27 +537,10 @@ ggplot() +
   ylab('Probability of being in treatment') +
   ggtitle("Expected Values of being in treatment depending on years of education")
 
+# 95% CI is enclosed by red lines. Black line is a mean of predictions
+
 ```
 
-for (z in 1:100) {
-      
-        # getting the predicted value for each simulated coefficient
-        # we do not need to supplement the prediction with a stochastic term
-        # since we are calculating the Expected Value - we still are taking the
-        # mean of the predictions and since the mean of the stochastic term
-        # should be zero, there's no value in adding it to the model.
-        
-        # getting the sum of the coefficients multiplied by the respective 
-        # values ([2:7]) and adding the intercept to the resulting value
-        preds = sum(model.glm.sim@coef[z, 2:6] * data_means) +
-              model.glm.sim@coef[z, 1] + rnorm(1, mean=0, sd=model.glm.sim@sigma)
-        # preds = sigmoid(preds + model.glm.sim@coef[z, 1])
-        preds = logit2prob(preds)
-        
-        # storing all the predictions in the form of probabilities
-        storage = append(storage, preds)
-      }
-      
 #### STEP 4
 
 Then, do the same thing, but this time for the predicted values of the probability of receiving treatment as education varies from 3 to 16. Be sure to include axes labels and figure titles.
@@ -563,7 +567,11 @@ for (i in 3:16) {
   # To decrease computing time, I used the inbuilt parameter se.fit
   # When constructing CI, I obtained 95% interval by multiplying 
   # the standard error by 1.96 and then subtracting or adding it
-  # to the predicted probability
+  # to the predicted probability.
+  #
+  # I hope it is OK to use in-built parameters - I demonstrated my 
+  # ability to use sim in the previous question and decided to explore
+  # a different, probably more efficient path that yields the same result
   predictions = predict(model.glm, newdata=data_means, type="response",
                         se.fit = TRUE)
   
@@ -600,10 +608,10 @@ ggplot() +
 
 Lastly, write a short paragraph with your reflections on this exercise and the results you obtained.
 
+The reflection here is analogous to my reflection for the linear regression: EV have much stronger predictions since we take multiple means of means of means. Also, the line slope suggest that individuals with more years of education are more likely to be selected for treatment. 
 
 
 ## QUESTION 5
-
 
 Write the executive summary for a decision brief about the impact of a stress therapy program, targeted at individuals age 18-42, intended to reduce average monthly stress. The program was tested via RCT, and the results are summarized by the figure that you get if you run this code chunk:
 
