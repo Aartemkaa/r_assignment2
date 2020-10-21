@@ -354,6 +354,7 @@ ggplot() +
 
 Lastly, write a short paragraph with your reflections on this exercise (specifically, the length of intervals for given expected vs. predicted values) and the results you obtained.
 
+From both graphs, it is clear that taking an expected value results in much more confident prediction. This happens because in addition to iterating over the probability distributon of the
 
 
 
@@ -425,6 +426,7 @@ Then, using the simulation-based approach and the `arm` library, set all the pre
 
 ```{r}
 
+set.seed(32)
 age = mean(lalonde$age)
 hisp = mean(lalonde$hisp)
 re74 = mean(lalonde$re74)
@@ -452,9 +454,9 @@ for (i in 3:16){
   # vector containing the expected values (means of the simulated values)
   expected_values = c()
   
-  for (x in 1:10) {
+  for (x in 1:5) {
       # simulating 100 coefficients 100 times
-      # Using 1000 values for sim or as the number of simulation takes too 
+      # Using 1000 values for sim() or as the number of simulation takes too 
       # much time to run, 100 values for both should suffice
       model.glm.sim = sim(model.glm.bootstrapped, n.sims=100)
       
@@ -471,11 +473,11 @@ for (i in 3:16){
         
         # getting the sum of the coefficients multiplied by the respective 
         # values ([2:7]) and adding the intercept to the resulting value
-        preds = sum(model.lalonde.sim@coef[z, 2:7] * data_means) 
-        preds = preds + model.lalonde.sim@coef[z, 1]
+        preds = sum(model.glm.sim@coef[z, 2:6] * data_means) 
+        preds = sigmoid(preds + model.glm.sim@coef[z, 1])
         
-        # storing all the predictions
-        storage = append(storage, sigmoid(sum(preds)))
+        # storing all the predictions in the form of probabilities
+        storage = append(storage, preds)
       }
       
       # Expected Value is the mean of all the values obtained
@@ -508,8 +510,8 @@ ggplot() +
   geom_line(data = middle_ev, aes(x = Educ, y = Predicted_values), color = "black", lwd=2) +
   geom_line(data = big_ev, aes(x = Educ, y = Predicted_values), color = "red", lwd=0.4) +
   xlab('Years of education') +
-  ylab('Expected income ($)') +
-  ggtitle("Predicted Expected Values of the impact of education on the income")
+  ylab('Probability of being in treatment') +
+  ggtitle("Expected Values of being in treatment depending on years of education")
 
 ```
 
@@ -518,7 +520,58 @@ ggplot() +
 Then, do the same thing, but this time for the predicted values of the probability of receiving treatment as education varies from 3 to 16. Be sure to include axes labels and figure titles.
 
 ```{r}
-# YOUR CODE HERE
+
+# Similar to what we did before with linear regression
+age = mean(lalonde$age)
+hisp = mean(lalonde$hisp)
+re74 = mean(lalonde$re74)
+re75 = mean(lalonde$re75)
+# setting it to NA and we will change it later in the loop
+educ = NA
+data_means = data.frame(age, educ, re74, re75, hisp)
+colnames(data_means) = c("age", "educ", "re74", "re75", "hisp")
+
+predicted = c()
+mins      = c()
+maxs      = c()
+
+
+for (i in 3:16) {
+  data_means$educ = i
+  # To decrease computing time, I used the inbuilt parameter se.fit
+  # When constructing CI, I obtained 95% interval by multiplying 
+  # the standard error by 1.96 and then subtracting or adding it
+  # to the predicted probability
+  predictions = predict(model.glm, newdata=data_means, type="response",
+                        se.fit = TRUE)
+  
+  # storing the probability prediction
+  predicted = append(predicted, c(predictions$fit))
+  # storing the lower bound of 95% confidence interval
+  mins = append(mins, c(predictions$fit) - (1.96*c(predictions$se.fit)))
+  # storing the upper bound of 95% confidence interval
+  maxs = append(maxs, c(predictions$fit) + (1.96*c(predictions$se.fit)))
+}
+
+# necessary manipulations to plot the result    
+x = 3:16
+small = data.frame(x, mins)
+pred  = data.frame(x, predicted)
+big   = data.frame(x, maxs)
+cols  = c("Educ", "Predicted_values")
+colnames(small) = cols
+colnames(pred) = cols
+colnames(big) = cols
+ggplot() + 
+  geom_line(data = small, aes(x = Educ, y = Predicted_values), color = "red", lwd=0.4) +
+  geom_line(data = pred, aes(x = Educ, y = Predicted_values), color = "black", lwd=2) +
+  geom_line(data = big, aes(x = Educ, y = Predicted_values), color = "red", lwd=0.4) +
+  xlab('Years of education') +
+  ylab('Probability of being in treatment') +
+  ggtitle("Predicted values of the impact of education on the income")
+# The area enclosed by the two red lines represents the 95% confidence interval for our prediction
+# The bold black line represents our prediction about the income of a person with all predictors 
+# but education held constant.
 ```
 
 #### STEP 5
@@ -540,7 +593,7 @@ Write the executive summary for a decision brief about the impact of a stress th
 # Participants in the study record their stress level for a month.
 # Every day, participants assign a value from 1 to 10 for their stress level. 
 # At the end of the month, we average the results for each participant.
-#adds the confidence interval (first row of the matrix is lower 
+# adds the confidence interval (first row of the matrix is lower 
 # bound, second row is the upper bound)
 trt1 = matrix(NA,nrow=2,ncol=7)
 ctrl = matrix(NA,nrow=2,ncol=7) 
@@ -593,7 +646,36 @@ for (age in seq(from=18,to=42,by=4)) {
 
 Your executive summary should be between about 4 and 10 sentences long, it should briefly describe the the purpose of the study, the methodology, and the policy implications/prescription. (Feel free to imaginatively but realistically embellish/fill-in-the-blanks with respect to any of the above, since I am not giving you backstory here).
 
-Write your executive summary here.
+--------------------- EXECUTIVE SUMMARY ---------------------------------
+The month-long study aimed to measure the impact of therapy sessions on daily stress levels
+of 100 people from different age groups by randomly assigning individuals either
+to treatment (bi-weekly therapy sessions) or control. At the end of each day, 
+the participants were asked to assess their daily stress level on a scale from 1 to 10.
+The results were collected and the average for every age group was taken together
+with the 95% confidence interval for both groups. 
+
+We know that the sample size and population size for all the groups is almost the same, 
+meaning that the difference in 95% CIs (their range) is most likely caused by the variance
+of respondents' answers. Thus, we can inference that the treatment effect on younger 
+population (18 to 26) is less certain that on older groups - wide treatment confidence
+intervals that have large intercept with control CIs (also capturing their means) 
+suggest lower effect size or treatment impact in general on these 3 age groups. 
+However, the effect of the treatment becomes more clear starting at "Age"=34 and only
+enhances with the age of participants. CIs for participants aged 38 and older don't
+even intersect, meaning that the level of stress experience by these groups (treatment)
+is significantly lower than the corresponding stress level of people of the same age in 
+control group. 
+
+Since it is a RCT, this can indicate causal link of treatment with decreased
+stress levels for people aged 38 or higher. We are also likely to admit that there's no
+causal link between treatment and stress levels for participants aged below 30, however, 
+there's a chance that the observed absence of link could be caused by generally higher 
+reported stress levels of younger participants and could be attributed to prospect theory -
+it is harder to "accurately" report peaking stress levels. This statement could also be 
+supported by the wider confidence intervals of treatment group that indicate the high 
+response variance with the group.
+
+
 
 
 
