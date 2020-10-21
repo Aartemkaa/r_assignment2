@@ -110,6 +110,7 @@ plot(prediction.sim@coef,
      ylab="Simulated coefficients for \"stores\"")
 predict_correct = predict(prediction, data=price)
 rmse = mean(((price - predict_correct)^2)^0.5)
+rmse
 plot(predict_correct, col="blue",
      type="l",
      main="Predictions for the share price",
@@ -189,9 +190,14 @@ summary(model.lalonde)
 
 Then calculate R-squared by hand and confirm / report that you get the same or nearly the same answer as the summary (`lm`) command. 
 
-Write out hand calculations here. ### calculate it later!!!!!
 
+actual_values = lalonde$re78
+predicted_values = predict(lalonde$re78)
 
+First, we take the sum of the (predicted_values - actual_values)^2 thus getting the residual sum of squares.
+Then, we take the sum of the (actual_values - mean(actual_values))^2 to get the total sum of squares
+Now we simply divide the first one by the second one and subtract them from one. 1 - Residual SS/Total SS
+Since lalonde has 445 values, doing them individually by hand would be weird, so I plugged in the vectors and got the same value.
 
 #### STEP 3
 
@@ -366,7 +372,7 @@ Using the `lalonde` data set, run a logistic regression, modeling treatment stat
 
 ```{r}
 data(lalonde)
-model.glm = glm(treat ~ age+educ+hisp+re74+re75, data=lalonde, family="binomial")
+model.glm = glm(treat ~ age+educ+re74+re75+hisp, data=lalonde, family="binomial")
 summary(model.glm)
 ```
 
@@ -433,8 +439,8 @@ re74 = mean(lalonde$re74)
 re75 = mean(lalonde$re75)
 # setting it to NA and we will change it later in the loop
 educ = NA
-data_means = data.frame(age, educ, re74, re75, hisp)
-colnames(data_means) = c("age", "educ", "re74", "re75", "hisp")
+data_means = data.frame(1, age, educ, re74, re75, hisp)
+colnames(data_means) = c("intercept", "age", "educ", "re74", "re75", "hisp")
 
 
 # vectors to store 95% confidence interval
@@ -442,6 +448,14 @@ small  = c()
 middle = c()
 big    = c()
 
+logit2prob <- function(logit){ 
+  
+  odds <- exp(logit) 
+  prob <- odds / (1 + odds)
+  
+  return(prob)
+
+}
 
 # iterating over every potential value of education
 # to get the predicted impact of education on the income
@@ -454,35 +468,24 @@ for (i in 3:16){
   # vector containing the expected values (means of the simulated values)
   expected_values = c()
   
-  for (x in 1:5) {
+  model.glm.sim = sim(model.glm, n.sims=1000)
+  
+  #
+  
+  for (x in 1:1000) {
       # simulating 100 coefficients 100 times
       # Using 1000 values for sim() or as the number of simulation takes too 
       # much time to run, 100 values for both should suffice
-      model.glm.sim = sim(model.glm.bootstrapped, n.sims=100)
+      
       
       # vector containing the predictions for simulated coefficients
-      storage = c()
-      
-      for (z in 1:100) {
-      
-        # getting the predicted value for each simulated coefficient
-        # we do not need to supplement the prediction with a stochastic term
-        # since we are calculating the Expected Value - we still are taking the
-        # mean of the predictions and since the mean of the stochastic term
-        # should be zero, there's no value in adding it to the model.
+      preds = sum(model.glm.sim@coef[x,] * data_means)
+      # preds = sigmoid(preds + model.glm.sim@coef[z, 1])
+      preds = sigmoid(preds)
         
-        # getting the sum of the coefficients multiplied by the respective 
-        # values ([2:7]) and adding the intercept to the resulting value
-        preds = sum(model.glm.sim@coef[z, 2:6] * data_means) 
-        preds = sigmoid(preds + model.glm.sim@coef[z, 1])
-        
-        # storing all the predictions in the form of probabilities
-        storage = append(storage, preds)
-      }
-      
       # Expected Value is the mean of all the values obtained
       # using simulated coefficients
-      expected_values = append(expected_values, mean(storage))
+      expected_values = append(expected_values, preds)
   }
   
   # calculating the quantiles to get the confidence interval
@@ -515,6 +518,25 @@ ggplot() +
 
 ```
 
+for (z in 1:100) {
+      
+        # getting the predicted value for each simulated coefficient
+        # we do not need to supplement the prediction with a stochastic term
+        # since we are calculating the Expected Value - we still are taking the
+        # mean of the predictions and since the mean of the stochastic term
+        # should be zero, there's no value in adding it to the model.
+        
+        # getting the sum of the coefficients multiplied by the respective 
+        # values ([2:7]) and adding the intercept to the resulting value
+        preds = sum(model.glm.sim@coef[z, 2:6] * data_means) +
+              model.glm.sim@coef[z, 1] + rnorm(1, mean=0, sd=model.glm.sim@sigma)
+        # preds = sigmoid(preds + model.glm.sim@coef[z, 1])
+        preds = logit2prob(preds)
+        
+        # storing all the predictions in the form of probabilities
+        storage = append(storage, preds)
+      }
+      
 #### STEP 4
 
 Then, do the same thing, but this time for the predicted values of the probability of receiving treatment as education varies from 3 to 16. Be sure to include axes labels and figure titles.
@@ -714,7 +736,8 @@ Import the dataset from this link: https://tinyurl.com/KaggleDataCS112
 Remove any rows that include missing values. 
 
 ```{r}
-# YOUR CODE HERE
+dataset = read.csv("https://tinyurl.com/KaggleDataCS112")
+dataset = na.omit(dataset)
 ```
 
 #### STEP 2: Codify outcome variable
@@ -722,7 +745,10 @@ Remove any rows that include missing values.
 Create a new variable that is either successful or NOT successful and call it `success` and save it in your dataframe. It should take values of 1 (successful) or 0 (unsuccessful).
 
 ```{r}
-# YOUR CODE HERE
+
+dataset$success = c(0)
+
+
 ```
 
 #### STEP 3: Getting the project length variable  
@@ -732,7 +758,16 @@ Projects on Kickstarter can last anywhere from 1 - 60 days. Kickstarter claims t
 Remove any project length that is higher than 60. 
 
 ```{r}
-# YOUR CODE HERE
+
+start = mdy(c(dataset$launched))
+end   = mdy_hms(dataset$deadline)
+
+difference = 
+
+dataset$length = c(as.double(difftime(lubridate::ymd_hms(dataset$deadline),
+                   lubridate::ymd_hms(dataset$launched),
+                   units = "days")))
+
 ```
 
 #### STEP 4: Splitting the data into a training and a testing set
