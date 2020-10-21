@@ -20,6 +20,8 @@ library(boot)
 library(randomForest)
 library(arm)
 library(ggplot2)
+install.packages("sigmoid")
+library(sigmoid)
 # we need to set the seed of R's random number generator, in order to produce comparable results 
 set.seed(32)
 ```
@@ -196,14 +198,18 @@ Write out hand calculations here. ### calculate it later!!!!!
 Then, setting all the predictors at their means EXCEPT `education`, create a data visualization that shows the 95% confidence interval of the expected values of `re78` as `education` varies from 3 to 16. Be sure to include axes labels and figure titles.
 
 ```{r}
+
+# creating a dataframe with averages for all variables except Education
 age = mean(lalonde$age)
 black = mean(lalonde$black)
 hisp = mean(lalonde$hisp)
 re74 = mean(lalonde$re74)
 re75 = mean(lalonde$re75)
+# setting it to NA and we will change it later in the loop
 educ = NA
 data_means = data.frame(age, educ, re74, re75, hisp, black)
 colnames(data_means) = c("age", "educ", "re74", "re75", "hisp", "black")
+
 
 # vectors to store 95% confidence interval
 small  = c()
@@ -211,18 +217,24 @@ middle = c()
 big    = c()
 
 
+# iterating over every potential value of education
+# to get the predicted impact of education on the income
 for (i in 3:16){
   
   # setting the education predictor to a fluctuating value to 
   # understand its isolated impact on the model
   data_means$educ = i
   
+  # vector containing the expected values (means of the simulated values)
   expected_values = c()
   
   for (x in 1:100) {
-      # simulating 1000 coefficients x times
+      # simulating 100 coefficients 100 times
+      # Using 1000 values for sim or as the number of simulation takes too 
+      # much time to run, 100 values for both should suffice
       model.lalonde.sim = sim(model.lalonde, n.sims=100)
       
+      # vector containing the predictions for simulated coefficients
       storage = c()
       
       for (z in 1:100) {
@@ -232,26 +244,31 @@ for (i in 3:16){
         # since we are calculating the Expected Value - we still are taking the
         # mean of the predictions and since the mean of the stochastic term
         # should be zero, there's no value in adding it to the model.
+        
+        # getting the sum of the coefficients multiplied by the respective 
+        # values ([2:7]) and adding the intercept to the resulting value
         preds = sum(model.lalonde.sim@coef[z, 2:7] * data_means) 
         preds = preds + model.lalonde.sim@coef[z, 1]
-        storage = append(storage, sum(preds))
         
+        # storing all the predictions
+        storage = append(storage, sum(preds))
       }
+      
       # Expected Value is the mean of all the values obtained
       # using simulated coefficients
       expected_values = append(expected_values, mean(storage))
-      #cat("Simulated", x, "sets of 1000 coefficients. \n")
   }
   
-  # calculating the quantiles
+  # calculating the quantiles to get the confidence interval
   small  = append(small, quantile(expected_values, probs=0.025))
   middle = append(middle, mean(expected_values))
   big    = append(big, quantile(expected_values, probs=0.975))
-  cat("Done with educ =", i, "iteration. \n")
   
+  # printing the update to track the model training progress
+  cat("Done with educ =", i, "iteration. \n")
 }
 
-
+# getting values into the dataframes to use when plotting the CI
 x = 3:16
 small_ev  = data.frame(x, small)
 middle_ev = data.frame(x, middle)
@@ -260,12 +277,15 @@ cols  = c("Educ", "Predicted_values")
 colnames(small_ev) = cols
 colnames(middle_ev) = cols
 colnames(big_ev) = cols
+
+# Plotting the values 
 ggplot() + 
   geom_line(data = small_ev, aes(x = Educ, y = Predicted_values), color = "red", lwd=0.4) +
   geom_line(data = middle_ev, aes(x = Educ, y = Predicted_values), color = "black", lwd=2) +
   geom_line(data = big_ev, aes(x = Educ, y = Predicted_values), color = "red", lwd=0.4) +
   xlab('Years of education') +
-  ylab('Expected income ($)')
+  ylab('Expected income ($)') +
+  ggtitle("Predicted Expected Values of the impact of education on the income")
 ```
 
 #### STEP 4
@@ -273,6 +293,7 @@ ggplot() +
 Then, do the same thing, but this time for the predicted values of `re78`. Be sure to include axes labels and figure titles.
 
 ```{r}
+# Analogous to the cell above
 age = mean(lalonde$age)
 black = mean(lalonde$black)
 hisp = mean(lalonde$hisp)
@@ -283,14 +304,32 @@ colnames(data_means) = c("age", "black", "hisp", "re74", "re75")
 predicted = c()
 mins      = c()
 maxs      = c()
+
+
 for (i in 3:16) {
-  
   data_means$educ = i
+  # to avoid redundant code, I used the inbuilt parameter "interval" that provides
+  # the confidence interval for a certain predicted value.
+  # When using "arm" library, we simulate the coefficients by taking the samples
+  # from the probability distribution of the coefficient. Our single predicted
+  # value is just a mean response value that has some degree of variability 
+  # around it. I could calculated the confidence interval like I did in the last
+  # task, using the sim() function from the "arm" library, but I thought that 
+  # it would be useful to also learn a different approach - in the case, the 
+  # interval parameter that is being passed on to the "predict" function
+  # calculates the uncertainty about our mean predictions. 
+  # (95% confidence interval  by default).
   predictions = predict(model.lalonde, newdata=data_means, interval="confidence")
+  
+  # storing the mean
   predicted = append(predicted, predictions[1])
+  # storing the lower bound of 95% confidence interval
   mins = append(mins, predictions[2])
+  # storing the upper bound of 95% confidence interval
   maxs = append(maxs, predictions[3])
 }
+
+# necessary manipulations to plot the result    
 x = 3:16
 small = data.frame(x, mins)
 pred  = data.frame(x, predicted)
@@ -304,7 +343,8 @@ ggplot() +
   geom_line(data = pred, aes(x = Educ, y = Predicted_values), color = "black", lwd=2) +
   geom_line(data = big, aes(x = Educ, y = Predicted_values), color = "red", lwd=0.4) +
   xlab('Years of education') +
-  ylab('Predicted values')
+  ylab('Predicted income ($)') +
+  ggtitle("Predicted values of the impact of education on the income")
 # The area enclosed by the two red lines represents the 95% confidence interval for our prediction
 # The bold black line represents our prediction about the income of a person with all predictors 
 # but education held constant.
@@ -348,24 +388,29 @@ This is 95% confidence interval for both predictors. Since the Standard Error mu
 Use a simple bootstrap to estimate (and report) bootstrapped confidence intervals for `age` and `education` given the logistic regression above. Code the bootstrap algorithm yourself.
 
 ```{r}
+set.seed(32)
 # bootstrapping the entire dataframe
-bootstrap = function(dataframe, samples) {
+bootstrap <- function(df, samples) {
   
-  # creating a new, bootstrapped dataframe
-  bootstrapped = data.frame()
+  # creating a new, empty dataframe to store bootstrapped values
+  bootstrapped = data.frame(c(samples))
   
-  for (column in 1:dim(dataframe)[2]) {
+  for (i in names(df)) {
     # getting bootstrapped values
-    values = sample(dataframe[, column], size=samples, replace=TRUE)
+    values <- sample(df[[i]], size=samples, replace=TRUE)
     
     # assigning the values to a column with identical name in a new dataframe
-    bootstrapped$names(dataframe[column]) = values
+    bootstrapped = cbind(bootstrapped, values)
   }
   
+  bootstrapped = subset(bootstrapped, select=-c(c.samples.))
+  colnames(bootstrapped) = names(df)
   return(bootstrapped)
 }
 
-model.glm.bootstrapped = glm(treat ~ age+educ+hisp+re74+re75, data=bootstrapped, family="binomial")
+lalonde.bootstrapped = bootstrap(lalonde, 1000000)
+
+model.glm.bootstrapped = glm(treat ~ age+educ+re74+re75+hisp, data=lalonde.bootstrapped, family="binomial")
 summary(model.glm.bootstrapped)
 ```
 
@@ -380,7 +425,91 @@ Then, using the simulation-based approach and the `arm` library, set all the pre
 
 ```{r}
 
+age = mean(lalonde$age)
+hisp = mean(lalonde$hisp)
+re74 = mean(lalonde$re74)
+re75 = mean(lalonde$re75)
+# setting it to NA and we will change it later in the loop
+educ = NA
+data_means = data.frame(age, educ, re74, re75, hisp)
+colnames(data_means) = c("age", "educ", "re74", "re75", "hisp")
 
+
+# vectors to store 95% confidence interval
+small  = c()
+middle = c()
+big    = c()
+
+
+# iterating over every potential value of education
+# to get the predicted impact of education on the income
+for (i in 3:16){
+  
+  # setting the education predictor to a fluctuating value to 
+  # understand its isolated impact on the model
+  data_means$educ = i
+  
+  # vector containing the expected values (means of the simulated values)
+  expected_values = c()
+  
+  for (x in 1:10) {
+      # simulating 100 coefficients 100 times
+      # Using 1000 values for sim or as the number of simulation takes too 
+      # much time to run, 100 values for both should suffice
+      model.glm.sim = sim(model.glm.bootstrapped, n.sims=100)
+      
+      # vector containing the predictions for simulated coefficients
+      storage = c()
+      
+      for (z in 1:100) {
+      
+        # getting the predicted value for each simulated coefficient
+        # we do not need to supplement the prediction with a stochastic term
+        # since we are calculating the Expected Value - we still are taking the
+        # mean of the predictions and since the mean of the stochastic term
+        # should be zero, there's no value in adding it to the model.
+        
+        # getting the sum of the coefficients multiplied by the respective 
+        # values ([2:7]) and adding the intercept to the resulting value
+        preds = sum(model.lalonde.sim@coef[z, 2:7] * data_means) 
+        preds = preds + model.lalonde.sim@coef[z, 1]
+        
+        # storing all the predictions
+        storage = append(storage, sigmoid(sum(preds)))
+      }
+      
+      # Expected Value is the mean of all the values obtained
+      # using simulated coefficients
+      expected_values = append(expected_values, mean(storage))
+  }
+  
+  # calculating the quantiles to get the confidence interval
+  small  = append(small, quantile(expected_values, probs=0.025))
+  middle = append(middle, mean(expected_values))
+  big    = append(big, quantile(expected_values, probs=0.975))
+  
+  # printing the update to track the model training progress
+  cat("Done with educ =", i, "iteration. \n")
+}
+
+# getting values into the dataframes to use when plotting the CI
+x = 3:16
+small_ev  = data.frame(x, small)
+middle_ev = data.frame(x, middle)
+big_ev    = data.frame(x, big)
+cols  = c("Educ", "Predicted_values")
+colnames(small_ev) = cols
+colnames(middle_ev) = cols
+colnames(big_ev) = cols
+
+# Plotting the values 
+ggplot() + 
+  geom_line(data = small_ev, aes(x = Educ, y = Predicted_values), color = "red", lwd=0.4) +
+  geom_line(data = middle_ev, aes(x = Educ, y = Predicted_values), color = "black", lwd=2) +
+  geom_line(data = big_ev, aes(x = Educ, y = Predicted_values), color = "red", lwd=0.4) +
+  xlab('Years of education') +
+  ylab('Expected income ($)') +
+  ggtitle("Predicted Expected Values of the impact of education on the income")
 
 ```
 
